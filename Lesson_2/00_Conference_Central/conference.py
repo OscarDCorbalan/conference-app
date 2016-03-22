@@ -33,6 +33,8 @@ from models import TeeShirtSize
 
 from settings import WEB_CLIENT_ID
 
+from utils import getUserId
+
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 
@@ -68,18 +70,23 @@ class ConferenceApi(remote.Service):
         user = endpoints.get_current_user()
         if not user:
             raise endpoints.UnauthorizedException('Authorization required')
-        profile = None
+        
+
         # Create a new Profile from logged in user data
+        user_id = getUserId(user)
+        key = ndb.Key(Profile, user_id)
+        profile = None
         if not profile:
             profile = Profile(
-                userId = None,
-                key = None,
+                userId = user_id,
+                key = key,
                 displayName = user.nickname(), 
                 mainEmail= user.email(),
                 teeShirtSize = str(TeeShirtSize.NOT_SPECIFIED),
             )
+            profile.put()
 
-        return profile      # return Profile
+        return profile
 
 
     def _doProfile(self, save_request=None):
