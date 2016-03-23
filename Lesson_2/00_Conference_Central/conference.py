@@ -3,14 +3,9 @@
 """
 conference.py -- Udacity conference server-side Python App Engine API;
     uses Google Cloud Endpoints
-
-$Id: conference.py,v 1.25 2014/05/24 23:42:19 wesc Exp wesc $
-
-created by wesc on 2014 apr 21
-
 """
 
-__author__ = 'wesc+api@google.com (Wesley Chun)'
+__author__ = 'oscardc@gmx.com (Oscar Dominguez)'
 
 
 from datetime import datetime
@@ -33,7 +28,7 @@ from models import TeeShirtSize
 
 from settings import WEB_CLIENT_ID
 
-from utils import getUserId
+import utils
 
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
@@ -72,10 +67,11 @@ class ConferenceApi(remote.Service):
             raise endpoints.UnauthorizedException('Authorization required')
         
 
-        # Create a new Profile from logged in user data
-        user_id = getUserId(user)
+        # Try to retrieve an existing profile...
+        user_id = utils.getUserId(user)
         key = ndb.Key(Profile, user_id)
-        profile = None
+        profile = key.get()
+        # ... and if not exists, create a new Profile from logged in user data
         if not profile:
             profile = Profile(
                 userId = user_id,
@@ -84,6 +80,7 @@ class ConferenceApi(remote.Service):
                 mainEmail= user.email(),
                 teeShirtSize = str(TeeShirtSize.NOT_SPECIFIED),
             )
+            # Create the profile in datastore
             profile.put()
 
         return profile
@@ -101,6 +98,8 @@ class ConferenceApi(remote.Service):
                     val = getattr(save_request, field)
                     if val:
                         setattr(prof, field, str(val))
+            # Save changes into datastore
+            prof.put()
 
         # return ProfileForm
         return self._copyProfileToForm(prof)
