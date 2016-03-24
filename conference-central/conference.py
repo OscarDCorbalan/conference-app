@@ -21,14 +21,12 @@ from protorpc import remote
 from google.appengine.api import urlfetch
 from google.appengine.ext import ndb
 
-from models import Profile
-from models import ProfileMiniForm
-from models import ProfileForm
-from models import TeeShirtSize
+from models import (Profile, ProfileMiniForm, ProfileForm, TeeShirtSize,
+    Conference, ConferenceForm)
 
 from settings import WEB_CLIENT_ID
 
-import utils
+from utils import get_user_id
 
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
@@ -44,7 +42,7 @@ class ConferenceApi(remote.Service):
 
 # - - - Profile objects - - - - - - - - - - - - - - - - - - -
 
-    def _copyProfileToForm(self, prof):
+    def _copy_profile_to_form(self, prof):
         """Copy relevant fields from Profile to ProfileForm."""
         # copy relevant fields from Profile to ProfileForm
         pf = ProfileForm()
@@ -59,7 +57,7 @@ class ConferenceApi(remote.Service):
         return pf
 
 
-    def _getProfileFromUser(self):
+    def _get_profile_from_user(self):
         """Return user Profile from datastore, creating new one if non-existent."""
         # Make sure user is authed
         user = endpoints.get_current_user()
@@ -68,7 +66,7 @@ class ConferenceApi(remote.Service):
         
 
         # Try to retrieve an existing profile...
-        user_id = utils.getUserId(user)
+        user_id = get_user_id(user)
         key = ndb.Key(Profile, user_id)
         profile = key.get()
         # ... and if not exists, create a new Profile from logged in user data
@@ -86,12 +84,12 @@ class ConferenceApi(remote.Service):
         return profile
 
 
-    def _doProfile(self, save_request=None):
+    def _do_profile(self, save_request=None):
         """Get user Profile and return to user, possibly updating it first."""
         # get user Profile
-        prof = self._getProfileFromUser()
+        prof = self._get_profile_from_user()
 
-        # if saveProfile(), process user-modifyable fields
+        # if _save_profile(), process user-modifyable fields
         if save_request:
             for field in ('displayName', 'teeShirtSize'):
                 if hasattr(save_request, field):
@@ -102,30 +100,30 @@ class ConferenceApi(remote.Service):
             prof.put()
 
         # return ProfileForm
-        return self._copyProfileToForm(prof)
+        return self._copy_profile_to_form(prof)
 
 
     @endpoints.method(message_types.VoidMessage, ProfileForm,
             path='profile', http_method='GET', name='getProfile')
-    def getProfile(self, request):
+    def _get_profile(self, request):
         """Return user profile."""
-        return self._doProfile()
+        return self._do_profile()
 
 
     @endpoints.method(ProfileMiniForm, ProfileForm,
             path='profile', http_method='POST', name='saveProfile')
-    def saveProfile(self, request):
+    def _save_profile(self, request):
         """Update & return user profile."""
-        return self._doProfile(request)
+        return self._do_profile(request)
 
 
-    def _createConferenceObject(self, request):
+    def _create_conference_object(self, request):
         """Create or update Conference object, returning ConferenceForm/request."""
         # preload necessary data items
         user = endpoints.get_current_user()
         if not user:
             raise endpoints.UnauthorizedException('Authorization required')
-        user_id = getUserId(user)
+        user_id = get_user_id(user)
 
         if not request.name:
             raise endpoints.BadRequestException("Conference 'name' field required")
@@ -173,10 +171,10 @@ class ConferenceApi(remote.Service):
 
     @endpoints.method(ConferenceForm, ConferenceForm, path='conference',
             http_method='POST', name='createConference')
-    def createConference(self, request):
+    def _create_conference(self, request):
         """Create new conference."""
-        return self._createConferenceObject(request)
-        
+        return self._create_conference_object(request)
+
 
 # registers API
 api = endpoints.api_server([ConferenceApi]) 
