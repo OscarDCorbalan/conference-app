@@ -22,7 +22,8 @@ from google.appengine.api import urlfetch
 from google.appengine.ext import ndb
 
 from models import (Profile, ProfileMiniForm, ProfileForm, TeeShirtSize,
-    Conference, ConferenceForm)
+    Conference, ConferenceForm, ConferenceForms, ConferenceQueryForm, 
+    ConferenceQueryForms)
 
 from settings import WEB_CLIENT_ID
 
@@ -46,7 +47,41 @@ DEFAULTS = {
 class ConferenceApi(remote.Service):
     """Conference API v0.1"""
 
-# - - - Profile objects - - - - - - - - - - - - - - - - - - -
+    @endpoints.method(message_types.VoidMessage, ProfileForm,
+        path='profile', http_method='GET', name='getProfile')
+    def _get_profile(self, request):
+        """Return user profile."""
+        return self._do_profile()
+
+
+    @endpoints.method(ProfileMiniForm, ProfileForm,
+        path='profile', http_method='POST', name='saveProfile')
+    def _save_profile(self, request):
+        """Update & return user profile."""
+        return self._do_profile(request)
+
+
+    @endpoints.method(ConferenceQueryForms, ConferenceForms,
+        path='queryConferences', http_method='POST', name='queryConferences')
+    def query_conferences(self, request):
+        """Query for conferences."""
+        conferences = Conference.query()
+
+         # return individual ConferenceForm object per Conference
+        return ConferenceForms(
+            items=[self._copy_conference_to_form(conf, "") \
+            for conf in conferences]
+        )
+
+
+    @endpoints.method(ConferenceForm, ConferenceForm,
+        path='conference', http_method='POST', name='createConference')
+    def _create_conference(self, request):
+        """Create new conference."""
+        return self._create_conference_object(request)
+
+
+    # - - - - - - - - - - - -  - - - - - - - - - - - - - - - - - - - - - - - -
 
     def _copy_profile_to_form(self, prof):
         """Copy relevant fields from Profile to ProfileForm."""
@@ -56,15 +91,34 @@ class ConferenceApi(remote.Service):
             if hasattr(prof, field.name):
                 # convert t-shirt string to Enum; just copy others
                 if field.name == 'teeShirtSize':
-                    setattr(pf, field.name, getattr(TeeShirtSize, getattr(prof, field.name)))
+                    setattr(pf, field.name, getattr(
+                        TeeShirtSize, getattr(prof, field.name)))
                 else:
                     setattr(pf, field.name, getattr(prof, field.name))
         pf.check_initialized()
         return pf
 
 
+    def _copy_conference_to_form(self, conf, displayName):
+        """Copy relevant fields from Conference to ConferenceForm."""
+        cf = ConferenceForm()
+        for field in cf.all_fields():
+            if hasattr(conf, field.name):
+                # convert Date to date string; just copy others
+                if field.name.endswith('Date'):
+                    setattr(cf, field.name, str(getattr(conf, field.name)))
+                else:
+                    setattr(cf, field.name, getattr(conf, field.name))
+            elif field.name == "websafeKey":
+                setattr(cf, field.name, conf.key.urlsafe())
+        if displayName:
+            setattr(cf, 'organizerDisplayName', displayName)
+        cf.check_initialized()
+        return cf
+
     def _get_profile_from_user(self):
-        """Return user Profile from datastore, creating new one if non-existent."""
+        """Return user Profile from datastore, creating new one if 
+        non-existent."""
         # Make sure user is authed
         user = endpoints.get_current_user()
         if not user:
@@ -109,50 +163,41 @@ class ConferenceApi(remote.Service):
         return self._copy_profile_to_form(prof)
 
 
-    @endpoints.method(message_types.VoidMessage, ProfileForm,
-            path='profile', http_method='GET', name='getProfile')
-    def _get_profile(self, request):
-        """Return user profile."""
-        return self._do_profile()
-
-
-    @endpoints.method(ProfileMiniForm, ProfileForm,
-            path='profile', http_method='POST', name='saveProfile')
-    def _save_profile(self, request):
-        """Update & return user profile."""
-        return self._do_profile(request)
-
-
     def _create_conference_object(self, request):
-        """Create or update Conference object, returning ConferenceForm/request."""
-        # preload necessary data items
+        """Create or update Conference object, returning 
+        ConferenceForm/request."""
+        # Preload necessary data items
         user = endpoints.get_current_user()
         if not user:
             raise endpoints.UnauthorizedException('Authorization required')
         user_id = get_user_id(user)
 
         if not request.name:
-            raise endpoints.BadRequestException("Conference 'name' field required")
+            raise endpoints.BadRequestException(
+                "Conference 'name' field required")
 
-        # copy ConferenceForm/ProtoRPC Message into dict
-        data = {field.name: getattr(request, field.name) for field in request.all_fields()}
+        # Copy ConferenceForm/ProtoRPC Message into dict
+        data = {field.name: getattr(request, field.name) 
+                for field in request.all_fields()}
         del data['websafeKey']
         del data['organizerDisplayName']
 
-        # add default values for those missing (both data model & outbound Message)
+        # Add default vals for those missing (in data model & outbound Message)
         for df in DEFAULTS:
             if data[df] in (None, []):
                 data[df] = DEFAULTS[df]
                 setattr(request, df, DEFAULTS[df])
 
-        # convert dates from strings to Date objects; set month based on start_date
+        # Convert dates from strings to Date obj; set month based on start_date
         if data['startDate']:
-            data['startDate'] = datetime.strptime(data['startDate'][:10], "%Y-%m-%d").date()
+            data['startDate'] = datetime.strptime(
+                data['startDate'][:10], "%Y-%m-%d").date()
             data['month'] = data['startDate'].month
         else:
             data['month'] = 0
         if data['endDate']:
-            data['endDate'] = datetime.strptime(data['endDate'][:10], "%Y-%m-%d").date()
+            data['endDate'] = datetime.strptime(
+                data['endDate'][:10], "%Y-%m-%d").date()
 
         # set seatsAvailable to be same as maxAttendees on creation
         # both for data model & outbound Message
@@ -173,13 +218,6 @@ class ConferenceApi(remote.Service):
         Conference(**data).put()
 
         return request
-
-
-    @endpoints.method(ConferenceForm, ConferenceForm, path='conference',
-            http_method='POST', name='createConference')
-    def _create_conference(self, request):
-        """Create new conference."""
-        return self._create_conference_object(request)
 
 
 # registers API
