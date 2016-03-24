@@ -31,12 +31,18 @@ from utils import get_user_id
 
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
+
 DEFAULTS = {
     "city": "Default City",
     "maxAttendees": 0,
     "seatsAvailable": 0,
     "topics": [ "Default", "Topic" ],
 }
+
+CONF_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeConferenceKey=messages.StringField(1),
+)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -61,6 +67,13 @@ class ConferenceApi(remote.Service):
         return self._do_profile(request)
 
 
+    @endpoints.method(ConferenceForm, ConferenceForm,
+        path='conference', http_method='POST', name='createConference')
+    def _create_conference(self, request):
+        """Create new conference."""
+        return self._create_conference_object(request)
+
+
     @endpoints.method(ConferenceQueryForms, ConferenceForms,
         path='queryConferences', http_method='POST', name='queryConferences')
     def query_conferences(self, request):
@@ -74,11 +87,44 @@ class ConferenceApi(remote.Service):
         )
 
 
-    @endpoints.method(ConferenceForm, ConferenceForm,
-        path='conference', http_method='POST', name='createConference')
-    def _create_conference(self, request):
-        """Create new conference."""
-        return self._create_conference_object(request)
+    @endpoints.method(message_types.VoidMessage, ConferenceForms,
+        path='getConferencesCreated', http_method='POST', 
+        name='getConferencesCreated')
+    def get_conferences_created(self, request):
+        """Return conferences created by user."""
+        # make sure user is authed
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+
+        # make profile key
+        p_key = ndb.Key(Profile, get_user_id(user))
+        # create ancestor query for this user
+        conferences = Conference.query(ancestor=p_key)
+        # get the user profile and display name
+        prof = p_key.get()
+        displayName = getattr(prof, 'displayName')
+        # return set of ConferenceForm objects per Conference
+        return ConferenceForms(
+            items=[self._copy_conference_to_form(
+                conf, displayName) for conf in conferences]
+        )
+    
+
+    @endpoints.method(CONF_GET_REQUEST, ConferenceForm,
+        path='conference/{websafeConferenceKey}', http_method='GET', 
+        name='getConference')
+    def get_conference(self, request):
+        """Return requested conference (by websafeConferenceKey)."""
+        # get Conference object from request; bail if not found
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
+        if not conf:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % request.websafeConferenceKey)
+        prof = conf.key.parent().get()
+        # return ConferenceForm
+        return self._copy_conference_to_form(conf, getattr(prof, 'displayName'))
+     
 
 
     # - - - - - - - - - - - -  - - - - - - - - - - - - - - - - - - - - - - - -
@@ -115,6 +161,7 @@ class ConferenceApi(remote.Service):
             setattr(cf, 'organizerDisplayName', displayName)
         cf.check_initialized()
         return cf
+
 
     def _get_profile_from_user(self):
         """Return user Profile from datastore, creating new one if 
