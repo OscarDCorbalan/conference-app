@@ -30,6 +30,12 @@ from utils import get_user_id
 
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
+DEFAULTS = {
+    "city": "Default City",
+    "maxAttendees": 0,
+    "seatsAvailable": 0,
+    "topics": [ "Default", "Topic" ],
+}
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
