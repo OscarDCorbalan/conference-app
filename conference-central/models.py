@@ -4,13 +4,9 @@
 
 Udacity conference server-side Python App Engine data & ProtoRPC models
 
-$Id: models.py,v 1.1 2014/05/24 22:01:10 wesc Exp $
-
-created/forked from conferences.py by wesc on 2014 may 24
-
 """
 
-__author__ = 'wesc+api@google.com (Wesley Chun)'
+__author__ = 'oscardc@gmx.com (Oscar D. Corbalan)'
 
 import httplib
 import endpoints
@@ -57,3 +53,34 @@ class TeeShirtSize(messages.Enum):
     XXL_W = 13
     XXXL_M = 14
     XXXL_W = 15
+
+
+class Conference(ndb.Model):
+    """Conference -- Conference object"""
+    name            = ndb.StringProperty(required=True)
+    description     = ndb.StringProperty()
+    organizerUserId = ndb.StringProperty()
+    topics          = ndb.StringProperty(repeated=True)
+    city            = ndb.StringProperty()
+    startDate       = ndb.DateProperty()
+    month           = ndb.IntegerProperty()
+    endDate         = ndb.DateProperty()
+    maxAttendees    = ndb.IntegerProperty()
+    seatsAvailable  = ndb.IntegerProperty()
+
+
+class ConferenceForm(messages.Message):
+    """ConferenceForm -- Conference outbound form message"""
+    name            = messages.StringField(1)
+    description     = messages.StringField(2)
+    organizerUserId = messages.StringField(3)
+    topics          = messages.StringField(4, repeated=True)
+    city            = messages.StringField(5)
+    startDate       = messages.StringField(6) #DateTimeField()
+    month           = messages.IntegerField(7)
+    maxAttendees    = messages.IntegerField(8)
+    seatsAvailable  = messages.IntegerField(9)
+    endDate         = messages.StringField(10) #DateTimeField()
+    websafeKey      = messages.StringField(11)
+    organizerDisplayName = messages.StringField(12)
+
