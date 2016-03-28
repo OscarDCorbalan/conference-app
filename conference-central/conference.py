@@ -7,26 +7,20 @@ conference.py -- Udacity conference server-side Python App Engine API;
 
 __author__ = 'oscardc@gmx.com (Oscar D. Corbalan)'
 
-# TODO join imports
-from datetime import datetime
+
+import endpoints
 import json
 import os
 import time
 
-import endpoints
-from protorpc import messages
-from protorpc import message_types
-from protorpc import remote
-
+from datetime import datetime
 from google.appengine.api import urlfetch
 from google.appengine.ext import ndb
-
 from models import (Profile, ProfileMiniForm, ProfileForm, TeeShirtSize,
     Conference, ConferenceForm, ConferenceForms, ConferenceQueryForm, 
     ConferenceQueryForms, BooleanMessage, ConflictException)
-
+from protorpc import messages, message_types, remote
 from settings import WEB_CLIENT_ID
-
 from utils import get_user_id
 
 
