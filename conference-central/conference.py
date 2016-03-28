@@ -7,7 +7,7 @@ conference.py -- Udacity conference server-side Python App Engine API;
 
 __author__ = 'oscardc@gmx.com (Oscar D. Corbalan)'
 
-
+# TODO join imports
 from datetime import datetime
 import json
 import os
@@ -23,11 +23,12 @@ from google.appengine.ext import ndb
 
 from models import (Profile, ProfileMiniForm, ProfileForm, TeeShirtSize,
     Conference, ConferenceForm, ConferenceForms, ConferenceQueryForm, 
-    ConferenceQueryForms)
+    ConferenceQueryForms, BooleanMessage, ConflictException)
 
 from settings import WEB_CLIENT_ID
 
 from utils import get_user_id
+
 
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
@@ -141,7 +142,36 @@ class ConferenceApi(remote.Service):
         prof = conf.key.parent().get()
         # return ConferenceForm
         return self._copy_conference_to_form(conf, getattr(prof, 'displayName'))
-     
+
+
+    @endpoints.method(CONF_GET_REQUEST, BooleanMessage,
+            path='conference/{websafeConferenceKey}',
+            http_method='POST', name='registerForConference')
+    def register_for_conference(self, request):
+        """Register user for selected conference."""
+        return self._conference_registration(request)
+
+
+    @endpoints.method(message_types.VoidMessage, ConferenceForms,
+        path='conferences/attending', http_method='GET',
+        name='getConferencesToAttend')
+    def get_conferences_to_attend(self, request):
+        """Get list of conferences that user has registered for."""
+        # TODO:
+        # Get user Profile
+        profile = self._get_profile_from_user()
+        # step 2: get conferenceKeysToAttend from profile.
+        # to make a ndb key from websafe key you can use:
+        # ndb.Key(urlsafe=my_websafe_key_string)
+        ws_keys = profile.conferenceKeysToAttend
+        ndb_keys = [ndb.Key(urlsafe = ws_key) for ws_key in ws_keys]
+        # step 3: fetch conferences from datastore. Do not fetch them one by one!
+        conferences = ndb.get_multi(ndb_keys)
+
+        # return set of ConferenceForm objects per Conference
+        return ConferenceForms(items = [
+            self._copy_conference_to_form(conf, "") for conf in conferences])
+
 
     # - - - - - - - - - - - -  - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -334,6 +364,55 @@ class ConferenceApi(remote.Service):
 
             formatted_filters.append(filtr)
         return (inequality_field, formatted_filters)
+    
+
+    @ndb.transactional(xg=True)
+    def _conference_registration(self, request, reg=True):
+        """Register or unregister user for selected conference."""
+        retval = None
+        prof = self._get_profile_from_user() # get user Profile
+
+        # Check if conf exists given websafeConfKey
+        # Get conference; check that it exists
+        wsck = request.websafeConferenceKey
+        conf = ndb.Key(urlsafe=wsck).get()
+        if not conf:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % wsck)
+
+        # Register
+        if reg:
+            # Check if user already registered otherwise add
+            if wsck in prof.conferenceKeysToAttend:
+                raise ConflictException(
+                    "You have already registered for this conference")
+
+            # Check if seats available
+            if conf.seatsAvailable <= 0:
+                raise ConflictException(
+                    "There are no seats available.")
+
+            # Register user, take away one seat
+            prof.conferenceKeysToAttend.append(wsck)
+            conf.seatsAvailable -= 1
+            retval = True
+
+        # Unregister
+        else:
+            # Check if user already registered
+            if wsck in prof.conferenceKeysToAttend:
+
+                # Unregister user, add back one seat
+                prof.conferenceKeysToAttend.remove(wsck)
+                conf.seatsAvailable += 1
+                retval = True
+            else:
+                retval = False
+
+        # Write things back to the datastore & return
+        prof.put()
+        conf.put()
+        return BooleanMessage(data=retval)
 
 # - - - - - - - - - - - - - - - - - - - - - 
 
