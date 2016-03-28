@@ -34,8 +34,14 @@ DEFAULTS = {
     "topics": [ "Default", "Topic" ],
 }
 
+# Request config
 CONF_GET_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
+    websafeConferenceKey=messages.StringField(1),
+)
+
+CONF_POST_REQUEST = endpoints.ResourceContainer(
+    ConferenceForm,
     websafeConferenceKey=messages.StringField(1),
 )
 
@@ -97,6 +103,14 @@ class ConferenceApi(remote.Service):
             items=[self._copy_conference_to_form(conf, "") \
             for conf in conferences]
         )
+
+
+    @endpoints.method(CONF_POST_REQUEST, ConferenceForm,
+            path='conference/{websafeConferenceKey}',
+            http_method='PUT', name='updateConference')
+    def update_conference(self, request):
+        """Update conference w/provided fields & return w/updated info."""
+        return self._update_conference_object(request)
 
 
     @endpoints.method(message_types.VoidMessage, ConferenceForms,
@@ -359,6 +373,46 @@ class ConferenceApi(remote.Service):
             formatted_filters.append(filtr)
         return (inequality_field, formatted_filters)
     
+
+    @ndb.transactional()
+    def _update_conference_object(self, request):
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id = _getUserId()
+
+        # copy ConferenceForm/ProtoRPC Message into dict
+        data = {field.name: getattr(request, field.name) for field in request.all_fields()}
+
+        # update existing conference
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
+        # check that conference exists
+        if not conf:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % request.websafeConferenceKey)
+
+        # check that user is owner
+        if user_id != conf.organizerUserId:
+            raise endpoints.ForbiddenException(
+                'Only the owner can update the conference.')
+
+        # Not getting all the fields, so don't create a new object; just
+        # copy relevant fields from ConferenceForm to Conference object
+        for field in request.all_fields():
+            data = getattr(request, field.name)
+            # only copy fields where we get data
+            if data not in (None, []):
+                # special handling for dates (convert string to Date)
+                if field.name in ('startDate', 'endDate'):
+                    data = datetime.strptime(data, "%Y-%m-%d").date()
+                    if field.name == 'startDate':
+                        conf.month = data.month
+                # write to Conference object
+                setattr(conf, field.name, data)
+        conf.put()
+        prof = ndb.Key(Profile, user_id).get()
+        return self._copyConferenceToForm(conf, getattr(prof, 'displayName'))
+
 
     @ndb.transactional(xg=True)
     def _conference_registration(self, request, reg=True):
