@@ -161,23 +161,28 @@ class ConferenceApi(remote.Service):
         return self._conference_registration(request)
 
 
+    @endpoints.method(CONF_GET_REQUEST, BooleanMessage,
+            path='conference/{websafeConferenceKey}',
+            http_method='DELETE', name='unregisterFromConference')
+    def unregister_from_conference(self, request):
+        """Unregister user for selected conference."""
+        return self._conference_registration(request, reg=False)
+
+
     @endpoints.method(message_types.VoidMessage, ConferenceForms,
         path='conferences/attending', http_method='GET',
         name='getConferencesToAttend')
     def get_conferences_to_attend(self, request):
         """Get list of conferences that user has registered for."""
-        # TODO:
         # Get user Profile
         profile = self._get_profile_from_user()
-        # step 2: get conferenceKeysToAttend from profile.
-        # to make a ndb key from websafe key you can use:
-        # ndb.Key(urlsafe=my_websafe_key_string)
+        # Get conferenceKeysToAttend from profile
         ws_keys = profile.conferenceKeysToAttend
         ndb_keys = [ndb.Key(urlsafe = ws_key) for ws_key in ws_keys]
-        # step 3: fetch conferences from datastore. Do not fetch them one by one!
+        # Fetch conferences from datastore
         conferences = ndb.get_multi(ndb_keys)
 
-        # return set of ConferenceForm objects per Conference
+        # Return set of ConferenceForm objects per Conference
         return ConferenceForms(items = [
             self._copy_conference_to_form(conf, "") for conf in conferences])
 
