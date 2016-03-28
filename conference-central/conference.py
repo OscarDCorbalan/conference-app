@@ -174,13 +174,21 @@ class ConferenceApi(remote.Service):
         name='getConferencesToAttend')
     def get_conferences_to_attend(self, request):
         """Get list of conferences that user has registered for."""
-        # Get user Profile
+        # Get conferences form profile
         profile = self._get_profile_from_user()
-        # Get conferenceKeysToAttend from profile
-        ws_keys = profile.conferenceKeysToAttend
-        ndb_keys = [ndb.Key(urlsafe = ws_key) for ws_key in ws_keys]
-        # Fetch conferences from datastore
+        ndb_keys = [ndb.Key(urlsafe = ws_key)
+                    for ws_key in profile.conferenceKeysToAttend]
         conferences = ndb.get_multi(ndb_keys)
+
+        # Get organizers from conferences
+        organisers = [ndb.Key(Profile, conf.organizerUserId)
+                      for conf in conferences]
+        profiles = ndb.get_multi(organisers)
+
+        # Get display names
+        names = {}
+        for profile in profiles:
+            names[profile.key.id()] = profile.displayName
 
         # Return set of ConferenceForm objects per Conference
         return ConferenceForms(items = [
