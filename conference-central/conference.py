@@ -381,17 +381,19 @@ class ConferenceApi(remote.Service):
             raise endpoints.UnauthorizedException('Authorization required')
         user_id = _getUserId()
 
-        # copy ConferenceForm/ProtoRPC Message into dict
-        data = {field.name: getattr(request, field.name) for field in request.all_fields()}
+        # Copy ConferenceForm/ProtoRPC Message into dict
+        data = {field.name: getattr(request, field.name) 
+                for field in request.all_fields()}
 
-        # update existing conference
+        # Update existing conference
         conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
-        # check that conference exists
+        # Check that conference exists
         if not conf:
             raise endpoints.NotFoundException(
-                'No conference found with key: %s' % request.websafeConferenceKey)
+                'No conference found with key: %s' %
+                request.websafeConferenceKey)
 
-        # check that user is owner
+        # Check that user is owner
         if user_id != conf.organizerUserId:
             raise endpoints.ForbiddenException(
                 'Only the owner can update the conference.')
@@ -400,18 +402,19 @@ class ConferenceApi(remote.Service):
         # copy relevant fields from ConferenceForm to Conference object
         for field in request.all_fields():
             data = getattr(request, field.name)
-            # only copy fields where we get data
+            # Only copy fields where we get data
             if data not in (None, []):
-                # special handling for dates (convert string to Date)
+                # Special handling for dates (convert string to Date)
                 if field.name in ('startDate', 'endDate'):
                     data = datetime.strptime(data, "%Y-%m-%d").date()
                     if field.name == 'startDate':
                         conf.month = data.month
-                # write to Conference object
+                # Write to Conference object
                 setattr(conf, field.name, data)
         conf.put()
         prof = ndb.Key(Profile, user_id).get()
-        return self._copyConferenceToForm(conf, getattr(prof, 'displayName'))
+        return self._copy_conference_to_form(
+            conf, getattr(prof, 'displayName'))
 
 
     @ndb.transactional(xg=True)
