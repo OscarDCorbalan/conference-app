@@ -14,11 +14,11 @@ import os
 import time
 
 from datetime import datetime
-from google.appengine.api import urlfetch
+from google.appengine.api import memcache, urlfetch
 from google.appengine.ext import ndb
 from models import (Profile, ProfileMiniForm, ProfileForm, TeeShirtSize,
     Conference, ConferenceForm, ConferenceForms, ConferenceQueryForm, 
-    ConferenceQueryForms, BooleanMessage, ConflictException)
+    ConferenceQueryForms, BooleanMessage, ConflictException, StringMessage)
 from protorpc import messages, message_types, remote
 from settings import WEB_CLIENT_ID
 from utils import get_user_id
@@ -26,6 +26,7 @@ from utils import get_user_id
 
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
+MEMCACHE_ANNOUNCEMENTS_KEY = "RECENT_ANNOUNCEMENTS"
 
 
 # Request config
@@ -194,6 +195,42 @@ class ConferenceApi(remote.Service):
         return ConferenceForms(items = [
             self._copy_conference_to_form(conf, "") for conf in conferences])
 
+# - - - Announcements - - - - - - - - - - - - - - - - - - - -
+
+    @endpoints.method(message_types.VoidMessage, StringMessage,
+            path='conference/announcement/get',
+            http_method='GET', name='getAnnouncement')
+    def get_announcement(self, request):
+        """Return Announcement from memcache."""
+        announcement = memcache.get(MEMCACHE_ANNOUNCEMENTS_KEY) or ""
+        return StringMessage(data = announcement)
+
+
+    @staticmethod
+    def _cache_announcement():
+        """Create Announcement & assign to memcache; used by
+        memcache cron job & putAnnouncement().
+        """
+        confs = Conference.query(ndb.AND(
+            Conference.seatsAvailable <= 5,
+            Conference.seatsAvailable > 0)
+        ).fetch(projection=[Conference.name])
+
+        if confs:
+            # If there are almost sold out conferences,
+            # format announcement and set it in memcache
+            announcement = '%s %s' % (
+                'Last chance to attend! The following conferences '
+                'are nearly sold out:',
+                ', '.join(conf.name for conf in confs))
+            memcache.set(MEMCACHE_ANNOUNCEMENTS_KEY, announcement)
+        else:
+            # If there are no sold out conferences,
+            # delete the memcache announcements entry
+            announcement = ""
+            memcache.delete(MEMCACHE_ANNOUNCEMENTS_KEY)
+
+        return announcement
 
     # - - - - - - - - - - - -  - - - - - - - - - - - - - - - - - - - - - - - -
 
