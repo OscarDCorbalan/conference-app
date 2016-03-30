@@ -14,7 +14,7 @@ import os
 import time
 
 from datetime import datetime
-from google.appengine.api import memcache, urlfetch
+from google.appengine.api import memcache, taskqueue
 from google.appengine.ext import ndb
 from models import (Profile, ProfileMiniForm, ProfileForm, TeeShirtSize,
     Conference, ConferenceForm, ConferenceForms, ConferenceQueryForm, 
@@ -366,8 +366,14 @@ class ConferenceApi(remote.Service):
         data['key'] = c_key
         data['organizerUserId'] = request.organizerUserId = user_id
 
-        # create Conference & return (modified) ConferenceForm
+        # Create Conference & return (modified) ConferenceForm
         Conference(**data).put()
+        
+        # Create Conference, send email to organizer confirming
+        taskqueue.add(params={'email': user.email(),
+            'conferenceInfo': repr(request)},
+            url='/tasks/send_confirmation_email'
+        )
 
         return request
     
