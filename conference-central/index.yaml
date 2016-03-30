@@ -109,8 +109,3 @@ indexes:
   properties:
   - name: topics
   - name: name
-
-- kind: Conference
-  properties:
-  - name: seatsAvailable
-  - name: name
